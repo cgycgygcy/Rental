@@ -1,48 +1,117 @@
 const demoListings = [
-  {id:'tp1',name:'大埔仔村屋 · 三房合租',district:'大埔仔',rent:5200,commute:18,term:12,deposit:2,source:'学长姐转租',status:'partial',note:'访谈示例：水电另计；通勤包含步行上山时间。',updated:'2026-11-13',bedrooms:'三房合租',people:'多人合租',utilities:'水电另计，金额待确认',image:'assets/building-district.svg'},
-  {id:'hh1',name:'坑口屋苑 · 合租单间',district:'坑口',rent:6500,commute:42,term:12,deposit:2,source:'小红书',status:'draft',note:'访谈示例：经转租人联系，签约前需确认业主书面同意。',updated:'2026-11-12',bedrooms:'独立房间',people:'三人合租',utilities:'待向出租方确认',image:'assets/building-estate.svg'},
-  {id:'pl1',name:'宝琳唐楼 · 四人合租',district:'宝琳',rent:5800,commute:31,term:12,deposit:2,source:'示例资料',status:'draft',note:'示例数据：实际租金、通勤与房源均需核实。',updated:'2026-11-10',bedrooms:'四人合租',people:'四人合租',utilities:'待向出租方确认',image:'assets/building-oldtown.svg'},
-  {id:'ds1',name:'日新舍 · 双人房床位',district:'钻石山',rent:4000,commute:40,term:12,deposit:0,source:'学校统筹',status:'verified',note:'访谈示例：每床月租约 HK$4,000；受访者反馈通勤实际超过官方估算。',updated:'2026-11-08',bedrooms:'双人房床位',people:'两人房',utilities:'按住宿安排',image:'assets/building-dorm.svg'}
+  {id:'tp1',name:'大埔仔村屋 · 三房合租',district:'大埔仔',rawRent:5200,rentUnit:'每床',commute:18,term:12,depositMonths:2,source:'学长姐转租',status:'partial',note:'访谈示例：水电另计；通勤包含步行上山时间。',updated:'2026-11-13',bedrooms:'三房合租',utilities:'水电另计，金额待确认',verificationItems:'水电金额待确认',image:'assets/demo-village-house.webp',imageDescription:'大埔仔村屋示意图，斜坡旁带露台的三层村屋'},
+  {id:'hh1',name:'坑口屋苑 · 合租单间',district:'坑口',rawRent:6500,rentUnit:'每房',people:1,commute:42,term:12,depositMonths:2,source:'小红书',status:'draft',note:'访谈示例：经转租人联系。',updated:'2026-11-12',bedrooms:'独立房间',verificationItems:'业主书面同意待确认',image:'assets/demo-estate-room.webp',imageDescription:'坑口屋苑合租单间示意图，房内有一张单人床和书桌'},
+  {id:'pl1',name:'宝琳唐楼 · 四人合租',district:'宝琳',rawRent:5800,rentUnit:'每床',commute:31,term:12,depositMonths:2,source:'示例资料',status:'draft',note:'示例数据：实际租金、通勤与房源均需核实。',updated:'2026-11-10',bedrooms:'四人合租',image:'assets/demo-tong-lau.webp',imageDescription:'宝琳唐楼示意图，带铁窗花和小阳台的旧式楼房'},
+  {id:'ds1',name:'日新舍 · 双人房床位',district:'钻石山',rawRent:4000,rentUnit:'每床',people:1,commute:40,term:12,depositMonths:0,source:'访谈示例',status:'verified',note:'受访者反馈实际通勤超过原先估算。',updated:'2026-11-08',bedrooms:'双人房床位',utilities:'按住宿安排',image:'assets/demo-twin-room.webp',imageDescription:'双人住宿房示意图，窗边有两张单人床和两张书桌'},
+  {id:'ppt1',name:'两人合租 · 整套报价示例',rawRent:14000,rentUnit:'整套',people:2,term:9,depositMonths:2,intermediaryFee:0,commute:30,source:'PPT 演示资料',status:'draft',note:'整套报价与费用拆分示例。',updated:'2026-11-20',bedrooms:'整套合租',verificationItems:'转租授权待确认',image:'assets/demo-shared-flat.webp',imageDescription:'两人合租整套示意图，两间独立卧室共用客厅和厨房'}
 ];
 
 const statusText={verified:'学生已看房',partial:'部分确认',draft:'待核实'};
 const statusClass={verified:'status-verified',partial:'status-partial',draft:'status-draft'};
+const statusRank={verified:0,partial:1,draft:2};
+const unknown='待确认';
+const feeFields=['rawRent','rentUnit','people','term','depositMonths','depositAmount','intermediaryFee','commute','verificationItems'];
 const hongKongAreas=['中西区','湾仔区','东区','南区','油尖旺区','深水埗区','九龙城区','黄大仙区','观塘区','葵青区','荃湾区','屯门区','元朗区','北区','大埔区','沙田区','西贡区','离岛区','大埔仔','清水湾','西贡','坑口','将军澳','调景岭','宝琳','康城','彩虹','钻石山','牛池湾','九龙湾','蓝田','油塘'];
 const storageKey='zhude-mingbai-local-v1';
-const persisted=(()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}')}catch{return {}}})();
-const persistedListings=Array.isArray(persisted.listings)?persisted.listings.filter(item=>item&&typeof item.id==='string'&&/^user-\d+$/.test(item.id)).map(item=>({...item,status:statusText[item.status]?item.status:'draft',image:''})):[];
-const listings=[...demoListings,...persistedListings];
+const persisted=(()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}')??{}}catch{return {}}})();
+const persistedListings=Array.isArray(persisted.listings)?persisted.listings
+  .filter(item=>item&&typeof item.id==='string'&&/^user-\d+$/.test(item.id))
+  .map(({rent,deposit,...item})=>{
+    // The old form recorded rent and deposit months on a per-person basis.
+    const legacy=Object.hasOwn(item,'rawRent')?{}:{rawRent:rent,rentUnit:'每床',people:null,depositMonths:deposit};
+    return {...item,...legacy,status:Object.hasOwn(statusText,item.status)?item.status:'draft',image:''};
+  }):[];
+const listings=[...demoListings,...persistedListings].map(withFees);
 const validIds=new Set(listings.map(item=>item.id));
-const state={saved:new Set(Array.isArray(persisted.saved)?persisted.saved.filter(id=>validIds.has(id)):[]),compared:new Set(),showSaved:false,view:matchMedia('(max-width: 600px)').matches?'cards':'table',draftImage:'',draftFile:null,ocrRun:0,toastTimer:0,lastOpener:null,ocrWorker:null,ocrPromise:null};
+const state={saved:new Set(Array.isArray(persisted.saved)?persisted.saved.filter(id=>validIds.has(id)):[]),compared:new Set(),showSaved:false,view:matchMedia('(max-width: 600px)').matches?'cards':'table',draftImage:'',draftFile:null,ocrRun:0,toastTimer:0,ocrWorker:null,ocrPromise:null};
 const $=(selector,root=document)=>root.querySelector(selector);
 const $$=(selector,root=document)=>Array.from(root.querySelectorAll(selector));
-const money=value=>'HK$'+Number(value).toLocaleString('en-US');
-const annualCost=item=>item.rent*12+(Number(item.deposit)||0)*item.rent;
-const commuteText=item=>item.commute?`约 ${item.commute} 分钟`:'待补充';
-const termText=item=>item.term?`${item.term} 个月`:'待补充';
-const depositText=item=>item.deposit===null||item.deposit===''?'待补充':`押 ${item.deposit} 个月`;
+const money=value=>Number.isFinite(value)?'HK$'+value.toLocaleString('en-US',{maximumFractionDigits:2}):unknown;
+const minutes=value=>Number.isFinite(value)?`约 ${value} 分钟`:unknown;
+const months=value=>Number.isFinite(value)?`${value} 个月`:unknown;
 const escapeHTML=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+
+function numeric(value,min=0){
+  if(typeof value!=='number'&&(typeof value!=='string'||!value.trim()))return null;
+  const parsed=Number(value);
+  return Number.isFinite(parsed)&&parsed>=min?parsed:null;
+}
+
+function withFees(item){
+  const rawRent=numeric(item.rawRent);
+  const rentUnit=['每床','每房','整套'].includes(item.rentUnit)?item.rentUnit:'';
+  const count=numeric(item.people,1);
+  const people=Number.isInteger(count)?count:null;
+  const shares=rentUnit==='每床'?1:rentUnit?people:null;
+  const term=numeric(item.term,.01);
+  const commute=numeric(item.commute);
+  const depositMonths=numeric(item.depositMonths);
+  const depositAmount=numeric(item.depositAmount);
+  const intermediaryFee=numeric(item.intermediaryFee);
+  const verificationItems=String(item.verificationItems??'').trim();
+  const depositFromMonths=depositMonths===0?0:
+    depositMonths!==null&&rawRent!==null?depositMonths*rawRent:null;
+  const conflictingDeposit=depositAmount!==null&&depositFromMonths!==null&&Math.abs(depositAmount-depositFromMonths)>.01;
+  const totalDeposit=conflictingDeposit?null:depositAmount??depositFromMonths;
+  const split=amount=>amount===0?0:amount!==null&&shares!==null?amount/shares:null;
+  const rentPerPerson=rawRent!==null&&shares!==null?rawRent/shares:null;
+  const refundableDeposit=split(totalDeposit);
+  const feeShare=split(intermediaryFee);
+  const upfrontCost=[rentPerPerson,refundableDeposit,feeShare].every(Number.isFinite)
+    ?rentPerPerson+refundableDeposit+feeShare:null;
+  const knownTermCost=[rentPerPerson,term,feeShare].every(Number.isFinite)
+    ?rentPerPerson*term+feeShare:null;
+  return {...item,rawRent,rentUnit,people,rentPerPerson,term,depositMonths,depositAmount,
+    intermediaryFee,upfrontCost,knownTermCost,refundableDeposit,verificationItems,commute,totalDeposit,conflictingDeposit};
+}
+
+function verificationText(item){
+  const items=item.verificationItems?[item.verificationItems]:[];
+  if(item.rawRent===null)items.push('原始报价待确认');
+  if(!item.rentUnit)items.push('报价单位待确认');
+  if(item.rentUnit==='每房'&&!item.people)items.push('每房分摊人数待确认');
+  if(item.rentUnit==='整套'&&!item.people)items.push('整套分摊人数待确认');
+  if(item.conflictingDeposit)items.push('押金月数与金额不一致，请核对');
+  else if(item.depositMonths===null&&item.depositAmount===null)items.push('押金待确认');
+  if(item.intermediaryFee===null)items.push('中介费待确认');
+  if(item.term===null)items.push('租期待确认');
+  if(item.commute===null)items.push('单程通勤待确认');
+  return [...new Set(items)].join('、')||'暂无已记录事项';
+}
+
+const personFees=[
+  ['入住前须付','upfrontCost'],
+  ['租期内已知支出','knownTermCost'],
+  ['可退押金','refundableDeposit']
+];
+
 function persistLocalData(){try{localStorage.setItem(storageKey,JSON.stringify({listings:listings.filter(item=>item.id.startsWith('user-')).map(({image,...item})=>item),saved:[...state.saved]}))}catch{}}
 
-function iconIllustration(label='暂无截图'){
-  return `<svg class="thumb-illustration" viewBox="0 0 120 100" role="img" aria-label="${escapeHTML(label)}"><rect x="18" y="27" width="84" height="54" rx="3" fill="#e7f0e9" stroke="#8cae99"/><path d="M14 82h92M26 27V18h68v9M36 38v31M60 38v31M84 38v31" fill="none" stroke="#39765a" stroke-width="2"/><path d="M18 57h84" fill="none" stroke="#b0c5b4"/></svg>`;
-}
 function thumb(item,large=false){
-  if(item.image)return `<div class="property-thumb${large?' detail-image':''}"><img src="${escapeHTML(item.image)}" alt="示意图：建筑结构"><span class="thumb-badge">示意图</span></div>`;
-  return `<div class="property-thumb${large?' detail-image':''}">${iconIllustration('示意图：暂无房源截图')}</div>`;
+  const sizeClass=large?' detail-image':'';
+  if(item.image){
+    const isScreenshot=item.image.startsWith('blob:');
+    const label=isScreenshot?'会话截图':'示意图';
+    const kindClass=isScreenshot?'':' property-illustration';
+    const alt=isScreenshot?'房源截图':item.imageDescription;
+    return `<div class="property-thumb${sizeClass}${kindClass}"><img src="${escapeHTML(item.image)}" alt="${escapeHTML(alt)}"><span class="thumb-badge" aria-hidden="true">${label}</span></div>`;
+  }
+  return `<div class="property-thumb property-placeholder${sizeClass}"><span>暂无截图</span></div>`;
 }
 function statusChip(item){return `<span class="status ${statusClass[item.status]}">${statusText[item.status]}</span>`;}
 function filteredListings(){
   const query=$('#searchInput').value.trim().toLowerCase(),district=$('#districtFilter').value,maxRent=$('#rentFilter').value;
   let result=listings.filter(item=>{
-    const haystack=`${item.name} ${item.district} ${item.note} ${item.source}`.toLowerCase();
-    return (!query||haystack.includes(query))&&(district==='all'||item.district===district)&&(!state.showSaved||state.saved.has(item.id))&&(maxRent==='all'||item.rent<=Number(maxRent));
+    const haystack=`${item.name} ${item.district??''} ${item.note} ${item.source} ${item.verificationItems}`.toLowerCase();
+    const withinBudget=maxRent==='all'||(item.rentPerPerson!==null&&item.rentPerPerson<=Number(maxRent));
+    return (!query||haystack.includes(query))&&(district==='all'||item.district===district)&&(!state.showSaved||state.saved.has(item.id))&&withinBudget;
   });
   const sort=$('#sortSelect').value;
-  if(sort==='rent')result.sort((a,b)=>a.rent-b.rent);
-  if(sort==='commute')result.sort((a,b)=>(Number(a.commute)||Infinity)-(Number(b.commute)||Infinity));
+  const byRent=(a,b)=>(a.rentPerPerson??Infinity)-(b.rentPerPerson??Infinity);
+  if(sort==='rent')result.sort(byRent);
+  if(sort==='commute')result.sort((a,b)=>(a.commute??Infinity)-(b.commute??Infinity));
   if(sort==='updated')result.sort((a,b)=>b.updated.localeCompare(a.updated));
-  if(sort==='recommended')result.sort((a,b)=>({verified:0,partial:1,draft:2}[a.status]-({verified:0,partial:1,draft:2}[b.status])||a.rent-b.rent));
+  if(sort==='status')result.sort((a,b)=>statusRank[a.status]-statusRank[b.status]||byRent(a,b));
   return result;
 }
 function setPage(page,updateHash=false){
@@ -54,7 +123,7 @@ function setPage(page,updateHash=false){
 function syncPageFromHash(){setPage(location.hash==='#workspace'||location.hash==='#board'?'workspace':'guide');}
 function renderEmpty(container,type){
   const copy={search:['没有找到匹配的房源','换个地区、屋苑或备注关键词试试。','清除搜索'],filters:['当前筛选没有房源','放宽预算或换一个区域，可以继续比较。','重置筛选'],saved:['还没有收藏房源','把看中的房源收藏起来，之后集中比较。','查看全部房源'],all:['看板还没有房源','添加第一张截图，开始整理你的租房资料。','添加房源截图']}[type];
-  container.innerHTML=`${iconIllustration('空状态插图')}<strong>${copy[0]}</strong><p>${copy[1]}</p><button class="button button-quiet empty-action" type="button" data-empty-action="${type}">${copy[2]}</button>`;
+  container.innerHTML=`<img class="empty-illustration" src="assets/guide-house.png" alt=""><strong>${copy[0]}</strong><p>${copy[1]}</p><button class="button button-quiet empty-action" type="button" data-empty-action="${type}">${copy[2]}</button>`;
 }
 function emptyType(){
   const query=$('#searchInput').value.trim(),filtered=filteredListings();
@@ -66,11 +135,23 @@ function emptyType(){
 }
 function row(item){
   const isSaved=state.saved.has(item.id),isCompared=state.compared.has(item.id);
-  return `<tr><td><div class="property-cell">${thumb(item)}<div><div class="property-title">${escapeHTML(item.name)}</div><div class="property-sub"><span>${escapeHTML(item.district||'区域待补充')}</span><span>·</span><span class="source-tag">${escapeHTML(item.source||'来源待补充')}</span></div></div></div></td><td class="price-cell"><strong>${money(item.rent)}</strong><span>每人 / 月</span></td><td class="annual-cell"><strong>${money(annualCost(item))}</strong><span>租金 + 押金</span></td><td class="commute-cell"><strong>${commuteText(item)}</strong><span>单程 · 估算</span></td><td>${statusChip(item)}</td><td><div class="row-actions"><button class="text-action" type="button" data-action="detail" data-id="${item.id}">详情</button><button class="text-action${isSaved?' saved':''}" type="button" data-action="save" data-id="${item.id}" aria-pressed="${isSaved}">${isSaved?'已收藏':'收藏'}</button><label class="compare-check"><input type="checkbox" data-action="compare" data-id="${item.id}" ${isCompared?'checked':''}><span>比较</span></label></div></td></tr>`;
+  return `<tr><td><div class="property-cell">${thumb(item)}<div><div class="property-title">${escapeHTML(item.name)}</div><div class="property-sub"><span>${escapeHTML(item.district||'区域待确认')}</span><span class="source-tag">${escapeHTML(item.source||'来源待确认')}</span></div></div></div></td>
+    <td class="price-cell"><strong>${money(item.rentPerPerson)}</strong></td>
+    ${personFees.map(([,key])=>`<td class="fee-cell"><strong>${money(item[key])}</strong></td>`).join('')}
+    <td class="commute-cell"><strong>${minutes(item.commute)}</strong></td>
+    <td>${statusChip(item)}</td><td class="verification-cell">${escapeHTML(verificationText(item))}</td>
+    <td><div class="row-actions"><button class="text-action" type="button" data-action="detail" data-id="${item.id}">详情</button><button class="text-action${isSaved?' saved':''}" type="button" data-action="save" data-id="${item.id}" aria-pressed="${isSaved}">${isSaved?'已收藏':'收藏'}</button><label class="compare-check"><input type="checkbox" data-action="compare" data-id="${item.id}" ${isCompared?'checked':''}><span>比较</span></label></div></td></tr>`;
 }
+
+function fieldList(fields,className){
+  return `<dl class="${className}">${fields.map(([label,value])=>`<div><dt>${label}</dt><dd>${escapeHTML(value)}</dd></div>`).join('')}</dl>`;
+}
+
 function card(item){
   const isSaved=state.saved.has(item.id),isCompared=state.compared.has(item.id);
-  return `<article class="listing-card"><div>${thumb(item)}</div><div class="card-content"><div class="card-top"><div><div class="property-title">${escapeHTML(item.name)}</div><div class="property-sub">${escapeHTML(item.district||'区域待补充')} · ${escapeHTML(item.source||'来源待补充')}</div></div>${statusChip(item)}</div><div class="card-price">${money(item.rent)} <small>每人 / 月</small></div><div class="card-meta"><span>单程${commuteText(item)}</span><span>${termText(item)}</span><span>${depositText(item)}</span></div><div class="annual-line"><span>首年约</span><strong>${money(annualCost(item))}</strong><span>租金 + 押金</span></div><div class="card-bottom"><button class="text-action" type="button" data-action="detail" data-id="${item.id}">查看资料</button><div class="row-actions"><button class="text-action${isSaved?' saved':''}" type="button" data-action="save" data-id="${item.id}" aria-pressed="${isSaved}">${isSaved?'已收藏':'收藏'}</button><label class="compare-check"><input type="checkbox" data-action="compare" data-id="${item.id}" ${isCompared?'checked':''}><span>比较</span></label></div></div></div></article>`;
+  return `<article class="listing-card"><div>${thumb(item)}</div><div class="card-content"><div class="card-top"><div><div class="property-title">${escapeHTML(item.name)}</div><div class="property-sub">${escapeHTML(item.district||'区域待确认')} · ${escapeHTML(item.source||'来源待确认')}</div></div>${statusChip(item)}</div><div class="card-price">${money(item.rentPerPerson)} <small>每人月租</small></div>
+    ${fieldList([...personFees.map(([label,key])=>[label,money(item[key])]),['单程通勤',minutes(item.commute)],['待核对事项',verificationText(item)]],'card-fees')}
+    <div class="card-bottom"><button class="text-action" type="button" data-action="detail" data-id="${item.id}">查看资料</button><div class="row-actions"><button class="text-action${isSaved?' saved':''}" type="button" data-action="save" data-id="${item.id}" aria-pressed="${isSaved}">${isSaved?'已收藏':'收藏'}</button><label class="compare-check"><input type="checkbox" data-action="compare" data-id="${item.id}" ${isCompared?'checked':''}><span>比较</span></label></div></div></div></article>`;
 }
 function filtersSummary(){
   const chips=[];
@@ -80,12 +161,21 @@ function filtersSummary(){
   $('#activeFilters').innerHTML=chips.map(text=>`<span class="filter-chip">${text}</span>`).join('');
 }
 function render(){
+  const focusedAction=document.activeElement?.dataset;
   const result=filteredListings(),empty=emptyType(),table=$('#tableView'),cards=$('#cardView');
   $('#resultCount').textContent=result.length;
   $('#resultAnnouncement').textContent=state.showSaved?`当前显示 ${result.length} 条已收藏房源`:`当前显示 ${result.length} 条房源`;
   $('#savedCount').textContent=state.saved.size;
   $('#savedNavLabel').textContent=state.showSaved?'查看全部':'我的收藏';
+  $('#savedFilter').setAttribute('aria-label',state.showSaved?'查看全部':'我的收藏');
   $('#savedFilter').setAttribute('aria-pressed',String(state.showSaved));
+  const sortHelp={
+    status:'依次显示学生已看房、部分确认、待核实。同状态按每人月租从低到高，月租待确认的排在该组末尾。',
+    rent:'按每人月租从低到高排列，月租待确认的排在末尾。',
+    commute:'按单程通勤从短到长排列，通勤待确认的排在末尾。',
+    updated:'按最近更新日期排列。'
+  };
+  $('#sortExplanation').textContent=sortHelp[$('#sortSelect').value];
   $$('.view-toggle').forEach(button=>{const selected=button.dataset.view===state.view;button.classList.toggle('is-active',selected);button.setAttribute('aria-pressed',String(selected));});
   filtersSummary();
   if(state.view==='table'){
@@ -96,22 +186,62 @@ function render(){
     if(empty){cards.innerHTML='';renderEmpty(cards,empty);}else cards.innerHTML=result.map(card).join('');
   }
   renderCompareDock();
+  if(focusedAction?.id&&focusedAction.action){
+    const view=state.view==='table'?table:cards;
+    const replacement=$$('[data-action]',view).find(control=>control.dataset.id===focusedAction.id&&control.dataset.action===focusedAction.action);
+    if(replacement&&!view.querySelector('.empty-state:not([hidden])'))replacement.focus({preventScroll:true});
+    else if(state.showSaved)$('#savedFilter').focus({preventScroll:true});
+  }
 }
 function renderCompareDock(){
   const dock=$('#compareDock');dock.hidden=state.compared.size===0;document.body.classList.toggle('has-compare-dock',state.compared.size>0);$('#compareCount').textContent=state.compared.size;$('#compareSelected').innerHTML=[...state.compared].map(id=>listings.find(item=>item.id===id)).filter(Boolean).map(item=>`<span class="compare-pill">${escapeHTML(item.name)}</span>`).join('');$('#compareButton').disabled=state.compared.size<2;
 }
-function openModal(dialog,opener){state.lastOpener=opener||document.activeElement;dialog.showModal();requestAnimationFrame(()=>dialog.querySelector('.icon-button')?.focus());}
-function closeModal(dialog){if(dialog.open)dialog.close();requestAnimationFrame(()=>state.lastOpener?.focus?.());}
+const dialogOpeners=new WeakMap();
+function openModal(dialog,opener){
+  if(dialog.open)return;
+  dialogOpeners.set(dialog,opener||document.activeElement);
+  dialog.scrollTop=0;
+  dialog.showModal();
+  dialog.querySelector('.icon-button')?.focus();
+}
+function closeModal(dialog){if(dialog.open)dialog.close();}
 function openDetail(id,opener){
   const item=listings.find(entry=>entry.id===id);if(!item)return;
   $('#detailTitle').textContent=item.name;
-  $('#detailBody').innerHTML=`<div class="detail-hero">${thumb(item,true)}<div><div class="detail-price">${money(item.rent)} <small>每人 / 月</small></div><div class="detail-sub">${escapeHTML(item.district||'区域待补充')} · ${escapeHTML(item.source||'来源待补充')}</div><div class="detail-status">${statusChip(item)}</div></div></div><div class="detail-fields">${[['单程通勤',`${commuteText(item)}（估算）`],['首年约',money(annualCost(item))],['房型',item.bedrooms||'待补充'],['面积',item.area||'待补充'],['入住人数',item.people||'待补充'],['租期',termText(item)],['押金',depositText(item)],['水电',item.utilities||'待确认'],['最近更新',item.updated||'待补充']].map(([label,value])=>`<div class="detail-field"><span>${label}</span><strong>${escapeHTML(value)}</strong></div>`).join('')}</div><p class="detail-note">${escapeHTML(item.note||'暂无备注')}</p><p class="detail-caveat">通勤与费用资料仍需按实际地址、时段和租约核实。状态不代表平台担保。</p>`;
+  const fields=[...personFees.map(([label,key])=>[`${label}（每人）`,money(item[key])]),
+    ['单程通勤',minutes(item.commute)],['原始月租报价',money(item.rawRent)],['报价单位',item.rentUnit||unknown],
+    ['分摊人数',item.rentUnit==='每床'?'每床按 1 人':item.people?`${item.people} 人`:unknown],
+    ['租期',months(item.term)],['押金月数',months(item.depositMonths)],['押金金额（报价单位）',money(item.totalDeposit)],['中介费（报价单位）',money(item.intermediaryFee)],
+    ['房型',item.bedrooms||unknown],['面积',item.area||unknown],['水电',item.utilities||unknown],['最近更新',item.updated||unknown]];
+  $('#detailBody').innerHTML=`<div class="detail-hero">${thumb(item,true)}<div><div class="detail-price">${money(item.rentPerPerson)} <small>每人月租</small></div><div class="detail-sub">${escapeHTML(item.district||'区域待确认')} · ${escapeHTML(item.source||'来源待确认')}</div><div class="detail-status">${statusChip(item)}</div></div></div>
+    ${fieldList(fields,'detail-fields')}
+    ${fieldList([['待核对事项',verificationText(item)]],'detail-verification')}
+    <p class="detail-note">${escapeHTML(item.note||'暂无备注')}</p><p class="detail-caveat">请按实际地址、出行时段和租约核实通勤与费用。</p>`;
   openModal($('#detailModal'),opener);
 }
+
 function openCompare(opener){
   const items=[...state.compared].map(id=>listings.find(item=>item.id===id)).filter(Boolean);if(items.length<2)return;
-  const fields=[['月租 / 人',item=>item.rent,'min'],['首年约',item=>annualCost(item),'min'],['单程通勤',item=>item.commute,'min'],['区域',item=>item.district||'待补充'],['房型',item=>item.bedrooms||'待补充'],['租期',item=>termText(item)],['押金',item=>item.deposit,'min'],['资料状态',item=>statusText[item.status]],['来源与备注',item=>`${item.source||'来源待补充'}；${item.note||'暂无备注'}`]];
-  $('#compareTable').innerHTML=`<table class="compare-table"><caption>比较项目与当前选择</caption><thead><tr><th scope="col">比较项目</th>${items.map(item=>`<th scope="col">${escapeHTML(item.name)}</th>`).join('')}</tr></thead><tbody>${fields.map(([label,getValue,mode])=>{const values=items.map(getValue),known=values.filter(value=>typeof value==='number'&&Number.isFinite(value)),best=mode==='min'&&known.length?Math.min(...known):null;return `<tr><th scope="row">${label}</th>${items.map((item,index)=>{const value=values[index],isNumeric=typeof value==='number'&&Number.isFinite(value),isBest=mode==='min'&&isNumeric&&value===best,display=mode==='min'&&!isNumeric?'待补充':mode==='min'?(label==='月租 / 人'?money(value):label==='首年约'?money(value):label==='单程通勤'?`约 ${value} 分钟`:label==='押金'?`${value} 个月`:String(value)):value;return `<td class="${isBest?'is-best':''}">${escapeHTML(display)}${isBest?'<span class="best-mark">相对更低</span>':''}</td>`}).join('')}</tr>`}).join('')}</tbody></table>`;
+  const fields=[
+    ['原始报价',item=>item.rawRent,money],['报价单位',item=>item.rentUnit],['每人月租',item=>item.rentPerPerson,money,true],
+    ...personFees.map(([label,key])=>[label,item=>item[key],money,true]),
+    ['单程通勤',item=>item.commute,minutes,true],['区域',item=>item.district],['房型',item=>item.bedrooms],
+    ['租期',item=>item.term,months],['资料状态',item=>statusText[item.status]],['待核对事项',verificationText],
+    ['来源与备注',item=>`${item.source==='未注明'||!item.source?'来源待确认':item.source}。 ${item.note||'暂无备注'}`]
+  ];
+  const rows=fields.map(([label,getValue,format=value=>value||unknown,rank=false])=>{
+    const values=items.map(getValue);
+    const lowest=rank&&values.every(Number.isFinite)&&new Set(values).size>1?Math.min(...values):null;
+    return `<tr><th scope="row">${label}</th>${values.map(value=>{
+      const isBest=lowest!==null&&value===lowest;
+      return `<td${isBest?' class="is-best"':''}>${escapeHTML(format(value))}${isBest?'<span class="best-mark">相对更低</span>':''}</td>`;
+    }).join('')}</tr>`;
+  }).join('');
+  $('#compareSummary').innerHTML=items.map(item=>`<article class="compare-summary-card"><h3>${escapeHTML(item.name)}</h3>
+    ${fieldList([['入住前须付',money(item.upfrontCost)],['单程通勤',minutes(item.commute)],['待核对事项',verificationText(item)]],'compare-key-fields')}
+    </article>`).join('');
+  $('#compareTable').innerHTML=`<table class="compare-table"><caption class="sr-only">比较项目与当前选择</caption><thead><tr><th scope="col">比较项目</th>${items.map(item=>`<th scope="col">${escapeHTML(item.name)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+  $('#compareTable').scrollLeft=0;
   openModal($('#compareModal'),opener);
 }
 function showToast(message){const toast=$('#toast');toast.textContent=message;toast.classList.add('show');clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>toast.classList.remove('show'),2600);}
@@ -122,15 +252,27 @@ function setOCRProgress(message,progress){
   if(Number.isFinite(progress)){bar.hidden=false;bar.value=Math.max(0,Math.min(1,progress));}else{bar.hidden=true;}
 }
 function parseOCRText(text){return RentalOCR.parse(text,hongKongAreas);}
+function updateFeePreview(){
+  const item=withFees(Object.fromEntries(new FormData($('#listingForm'))));
+  const requiresPeople=Boolean(item.rentUnit&&item.rentUnit!=='每床'&&!item.people);
+  $('#peopleHint').textContent=requiresPeople?`请填写${item.rentUnit}实际分摊人数。`:'每床按 1 人计算。每房或整套请填实际分摊人数。';
+  const fields=[['每人月租',money(item.rentPerPerson)],...personFees.map(([label,key])=>[label,money(item[key])])];
+  const html=fieldList(fields,'preview-fees')+(item.conflictingDeposit?'<p>押金月数与金额不一致，请核对。</p>':'');
+  if($('#feePreview').innerHTML!==html)$('#feePreview').innerHTML=html;
+}
+
 function applyOCRFields(parsed){
   const form=$('#listingForm');
-  for(const key of ['name','rent','commute','term','deposit','bedrooms','area','source','note'])if(parsed[key]&&(!form.elements[key].value||key==='source'&&form.elements[key].value==='未注明'))form.elements[key].value=parsed[key];
-  if(parsed.district&&!form.elements.district.value)form.elements.district.value=parsed.district;
+  for(const key of ['name','district','bedrooms','area','source','note',...feeFields]){
+    const field=form.elements[key];
+    if(parsed[key]&&(!field.value||(key==='source'&&field.value==='未注明')))field.value=parsed[key];
+  }
   $('#ocrText').textContent=parsed.raw||'';
   $('#ocrTextPanel').hidden=!parsed.raw;
-  const found=parsed.found.length?`识别到：${parsed.found.join('、')}。`:'未找到明确的房源字段。';
-  const missing=parsed.raw&&parsed.missing?.length?`截图中未识别到${parsed.missing.join('、')}，请补充。`:'';
+  const found=parsed.found.length?`已识别${parsed.found.join('、')}。`:'未找到明确的房源字段。';
+  const missing=parsed.raw&&parsed.missing.length?`请核对并补充${parsed.missing.join('、')}。`:'';
   $('#draftNote').textContent=found+missing+' 保存前请核对识别结果。';
+  updateFeePreview();
 }
 async function prepareOCRImage(file){
   const bitmap=await createImageBitmap(file);
@@ -222,35 +364,96 @@ function recognizeImage(file,run){
   ocrQueue=ocrQueue.then(task,task);
   return ocrQueue;
 }
-function addImageFiles(files){
+function addImageFiles(files,opener=$('#chooseFileButton')){
   const list=[...files];if(list.length>1)showToast('已选择多张图片，只使用第一张');const image=list.find(file=>file.type.startsWith('image/'));
   if(!image){setUploadStatus('没有找到图片文件，请选择 JPG、PNG 或 WEBP。');showToast('请选择图片格式的房源截图');return;}
   if(image.size>12*1024*1024){setUploadStatus('图片超过 12 MB，请先压缩截图后再上传。');showToast('图片过大，请选择小于 12 MB 的截图');return;}
-  state.ocrRun++;
-  if(state.draftImage)URL.revokeObjectURL(state.draftImage);state.draftImage=URL.createObjectURL(image);state.draftFile=image;$('#draftPreview').innerHTML=`<img src="${escapeHTML(state.draftImage)}" alt="待识别的本地房源截图">`;
-  const form=$('#listingForm');form.reset();form.elements.name.value='';form.elements.district.value='';form.elements.rent.value='';form.elements.commute.value='';form.elements.term.value='';form.elements.deposit.value='';form.elements.source.value='未注明';$('#ocrProgress').hidden=true;$('#ocrRetryButton').hidden=true;$('#ocrTextPanel').hidden=true;$('#ocrText').textContent='';$('#draftNote').textContent=`已载入 ${image.name}。为保护隐私，请确认截图中没有未遮盖的姓名、电话或微信号。`;
-  openModal($('#uploadModal'),$('#chooseFileButton'));const run=state.ocrRun;recognizeImage(image,run);
+  discardDraft();
+  state.draftImage=URL.createObjectURL(image);
+  state.draftFile=image;
+  $('#draftPreview').hidden=false;
+  $('#draftPreview').innerHTML=`<img src="${escapeHTML(state.draftImage)}" alt="待识别的本地房源截图">`;
+  $('#draftNote').textContent=`已载入 ${image.name}。OCR 结果会填入空白字段。`;
+  openModal($('#uploadModal'),opener);const run=state.ocrRun;recognizeImage(image,run);
 }
-function discardDraft(){state.ocrRun++;if(state.draftImage)URL.revokeObjectURL(state.draftImage);state.draftImage='';state.draftFile=null;$('#draftPreview').innerHTML='<span>等待截图预览</span>';$('#ocrProgress').hidden=true;$('#ocrRetryButton').hidden=true;$('#ocrTextPanel').hidden=true;$('#ocrText').textContent='';$('#listingForm').reset();}
-function handleUpload(event){addImageFiles(event.target.files);event.target.value='';}
-function resetFilters(){ $('#searchInput').value='';$('#districtFilter').value='all';$('#rentFilter').value='all';$('#sortSelect').value='recommended';state.showSaved=false;render(); }
+function discardDraft(){
+  state.ocrRun++;
+  if(state.draftImage)URL.revokeObjectURL(state.draftImage);
+  state.draftImage='';
+  state.draftFile=null;
+  $('#draftPreview').hidden=true;
+  $('#draftPreview').textContent='';
+  $('#ocrProgress').hidden=true;
+  $('#ocrRetryButton').hidden=true;
+  $('#ocrTextPanel').hidden=true;
+  $('#ocrTextPanel').open=false;
+  $('#ocrText').textContent='';
+  $('#draftNote').textContent='';
+  $('#listingForm').reset();
+  updateFeePreview();
+}
+function resetFilters(){ $('#searchInput').value='';$('#districtFilter').value='all';$('#rentFilter').value='all';$('#sortSelect').value='status';state.showSaved=false;render(); }
 function handleListingAction(event){const button=event.target.closest('[data-action="detail"],[data-action="save"]');if(!button)return;const {action,id}=button.dataset;if(action==='detail')openDetail(id,button);if(action==='save'){if(state.saved.has(id))state.saved.delete(id);else state.saved.add(id);persistLocalData();render();showToast(state.saved.has(id)?'已加入收藏':'已取消收藏');}}
 function handleCompareChange(event){const input=event.target.closest('input[data-action="compare"]');if(!input)return;const id=input.dataset.id;if(input.checked&&state.compared.size>=3){input.checked=false;showToast('最多同时比较 3 套房源');return;}if(input.checked)state.compared.add(id);else state.compared.delete(id);render();}
+function saveListing(event){
+  event.preventDefault();
+  const data=Object.fromEntries(new FormData(event.currentTarget));
+  const name=data.name.trim();
+  if(!name){event.currentTarget.elements.name.focus();return;}
+  const item=withFees({...data,id:`user-${Date.now()}`,name,note:data.note.trim(),
+    bedrooms:data.bedrooms.trim(),area:data.area.trim(),updated:new Date().toLocaleDateString('sv-SE'),image:state.draftImage});
+  listings.unshift(item);
+  persistLocalData();
+  // The listing owns the preview URL until this page is refreshed.
+  state.draftImage='';
+  closeModal($('#uploadModal'));
+  resetFilters();
+  setPage('workspace',true);
+  $('#boardTitle').focus({preventScroll:true});
+  $('#board').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  showToast('房源已加入当前看板');
+}
 function bind(){
   document.addEventListener('click',event=>{const link=event.target.closest('[data-page-link],a[href="#workspace"],a[href="#guide"]');if(!link)return;const page=link.getAttribute('href')==='#guide'?'guide':'workspace';event.preventDefault();setPage(page,true);window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});});
   window.addEventListener('hashchange',syncPageFromHash);window.addEventListener('popstate',syncPageFromHash);
   ['searchInput','districtFilter','rentFilter','sortSelect'].forEach(id=>$('#'+id).addEventListener(id==='searchInput'?'input':'change',render));
   $('#clearFilters').addEventListener('click',resetFilters);$('#savedFilter').addEventListener('click',()=>{state.showSaved=!state.showSaved;render();setPage('workspace',true);$('#board').scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});});
   $$('.view-toggle').forEach(button=>button.addEventListener('click',()=>{state.view=button.dataset.view;render();}));$('#listingRows').addEventListener('click',handleListingAction);$('#cardView').addEventListener('click',handleListingAction);$('#listingRows').addEventListener('change',handleCompareChange);$('#cardView').addEventListener('change',handleCompareChange);
-  $('#chooseFileButton').addEventListener('click',()=>$('#fileInput').click());$('#fileInput').addEventListener('change',handleUpload);
+  const fileInput=$('#fileInput');
+  let pickerOpener;
+  $$('[data-file-picker]').forEach(button=>button.addEventListener('click',()=>{
+    pickerOpener=button;
+    fileInput.click();
+  }));
+  fileInput.addEventListener('change',()=>{
+    if(fileInput.files.length)addImageFiles(fileInput.files,pickerOpener);
+    fileInput.value='';
+    pickerOpener=undefined;
+  });
+  $('#manualEntryButton').addEventListener('click',event=>{
+    discardDraft();
+    openModal($('#uploadModal'),event.currentTarget);
+    $('#listingForm').elements.name.focus();
+  });
   $('#ocrRetryButton').addEventListener('click',()=>{if(!state.draftFile)return;state.ocrRun++;$('#ocrRetryButton').hidden=true;recognizeImage(state.draftFile,state.ocrRun);});
   const drop=$('#dropZone');['dragenter','dragover'].forEach(type=>drop.addEventListener(type,event=>{event.preventDefault();drop.classList.add('is-over');}));['dragleave','drop'].forEach(type=>drop.addEventListener(type,event=>{event.preventDefault();drop.classList.remove('is-over');}));drop.addEventListener('drop',event=>addImageFiles(event.dataTransfer.files));
   document.addEventListener('paste',event=>{const image=[...(event.clipboardData?.items||[])].find(item=>item.type.startsWith('image/'));if(image){const file=image.getAsFile();if(file)addImageFiles([file]);}});
   $('#pasteButton').addEventListener('click',async()=>{try{if(!navigator.clipboard?.read)throw new Error('paste');const items=await navigator.clipboard.read();for(const item of items){const type=item.types.find(value=>value.startsWith('image/'));if(type){addImageFiles([await item.getType(type)]);return;}}setUploadStatus('剪贴板里没有图片，也可以按 Ctrl / ⌘ + V 粘贴截图。');showToast('剪贴板里没有图片');}catch{setUploadStatus('请先复制截图，再按 Ctrl / ⌘ + V 粘贴。');showToast('请先复制截图，再粘贴');}});
-  $('#listingForm').addEventListener('submit',event=>{event.preventDefault();const data=new FormData(event.currentTarget),status=data.get('status');listings.unshift({id:`user-${Date.now()}`,name:data.get('name').trim(),district:data.get('district')||'其他',rent:Number(data.get('rent')),commute:data.get('commute')?Number(data.get('commute')):null,term:data.get('term')?Number(data.get('term')):null,deposit:data.get('deposit')?Number(data.get('deposit')):null,source:data.get('source'),status,note:data.get('note').trim()||'用户添加的房源；请在签约前自行核实。',updated:new Date().toISOString().slice(0,10),bedrooms:data.get('bedrooms').trim()||'待补充',area:data.get('area').trim(),people:'待补充',utilities:'待确认',image:state.draftImage});persistLocalData();state.draftImage='';state.draftFile=null;event.currentTarget.reset();closeModal($('#uploadModal'));resetFilters();$('#board').scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});showToast('房源已加入当前看板');});
-  $('#compareButton').addEventListener('click',event=>openCompare(event.currentTarget));$('#clearCompare').addEventListener('click',()=>{state.compared.clear();render();});$('#methodButton').addEventListener('click',event=>openModal($('#methodModal'),event.currentTarget));$('#boardMethodButton').addEventListener('click',event=>openModal($('#methodModal'),event.currentTarget));
+  $('#listingForm').addEventListener('input',event=>{if(feeFields.includes(event.target.name))updateFeePreview();});
+  $('#listingForm').addEventListener('submit',saveListing);
+  $('#compareButton').addEventListener('click',event=>openCompare(event.currentTarget));$('#clearCompare').addEventListener('click',()=>{state.compared.clear();render();$('.view-toggle.is-active').focus();});$('#methodButton').addEventListener('click',event=>openModal($('#methodModal'),event.currentTarget));$('#boardMethodButton').addEventListener('click',event=>openModal($('#methodModal'),event.currentTarget));
   document.addEventListener('click',event=>{const button=event.target.closest('[data-empty-action]');if(!button)return;const action=button.dataset.emptyAction;if(action==='search'){$('#searchInput').value='';render();$('#searchInput').focus();}else if(action==='saved'){state.showSaved=false;render();}else if(action==='all'||action==='filters'){resetFilters();}});
-  $$('[data-close]').forEach(button=>button.addEventListener('click',()=>closeModal($('#'+button.dataset.close))));$$('dialog').forEach(dialog=>{dialog.addEventListener('click',event=>{if(event.target===dialog)closeModal(dialog)});dialog.addEventListener('close',()=>{if(dialog.id==='uploadModal')discardDraft();if(state.lastOpener?.isConnected)state.lastOpener.focus();});});
+  $$('[data-close]').forEach(button=>button.addEventListener('click',()=>closeModal($('#'+button.dataset.close))));
+  $$('dialog').forEach(dialog=>{
+    dialog.addEventListener('click',event=>{if(event.target===dialog)closeModal(dialog);});
+    dialog.addEventListener('close',()=>{
+      if(dialog.open)return;
+      if(dialog.id==='uploadModal')discardDraft();
+      if(document.activeElement===$('#boardTitle'))return;
+      const opener=dialogOpeners.get(dialog);
+      if(opener?.isConnected)opener.focus({preventScroll:true});
+    });
+  });
 }
 
 bind();render();syncPageFromHash();
