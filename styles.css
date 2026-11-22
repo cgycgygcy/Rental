@@ -185,3 +185,77 @@ a{color:inherit}
 .ocr-progress[data-complete="true"] .ocr-spinner{animation:none;border:0;border-radius:0;color:var(--green)}
 .ocr-progress[data-complete="true"] .ocr-spinner::after{content:"✓";font-weight:700}
 
+/* Fit every selected listing within the comparison on narrow screens. */
+@media (max-width: 800px) {
+  #compareModal .compare-table-wrap {
+    min-width: 0;
+    overflow: visible;
+  }
+
+  #compareModal .compare-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    --compare-columns: 2;
+  }
+
+  #compareModal .compare-table.cols-3 {
+    --compare-columns: 3;
+  }
+
+  #compareModal .compare-table :is(thead, tbody) {
+    display: block;
+  }
+
+  #compareModal .compare-table tr {
+    display: grid;
+    grid-template-columns: repeat(var(--compare-columns), minmax(0, 1fr));
+  }
+
+  #compareModal .compare-table .cmp-dim-head {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  #compareModal .compare-table th,
+  #compareModal .compare-table td {
+    min-width: 0;
+    padding: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  #compareModal .compare-table th {
+    position: static;
+  }
+
+  #compareModal .compare-table tbody th {
+    grid-column: 1 / -1;
+    width: auto;
+    padding-block: 6px;
+    background: var(--paper-deep);
+  }
+
+  #compareModal .compare-table tbody th::after {
+    content: none;
+  }
+
+  #compareModal .compare-table td + td,
+  #compareModal .compare-table thead th + th + th {
+    border-inline-start: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 800px) {
+  #compareModal .compare-table-title small {
+    display: none;
+  }
+}
+

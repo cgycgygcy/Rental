@@ -232,15 +232,16 @@ function openCompare(opener){
   const rows=fields.map(([label,getValue,format=value=>value||unknown,rank=false])=>{
     const values=items.map(getValue);
     const lowest=rank&&values.every(Number.isFinite)&&new Set(values).size>1?Math.min(...values):null;
-    return `<tr><th scope="row">${label}</th>${values.map(value=>{
+    return `<tr role="row"><th scope="row" role="rowheader">${label}</th>${values.map(value=>{
       const isBest=lowest!==null&&value===lowest;
-      return `<td${isBest?' class="is-best"':''}>${escapeHTML(format(value))}${isBest?'<span class="best-mark">相对更低</span>':''}</td>`;
+      return `<td role="cell"${isBest?' class="is-best"':''}>${escapeHTML(format(value))}${isBest?'<span class="best-mark">相对更低</span>':''}</td>`;
     }).join('')}</tr>`;
   }).join('');
   $('#compareSummary').innerHTML=items.map(item=>`<article class="compare-summary-card"><h3>${escapeHTML(item.name)}</h3>
     ${fieldList([['入住前须付',money(item.upfrontCost)],['单程通勤',minutes(item.commute)],['待核对事项',verificationText(item)]],'compare-key-fields')}
     </article>`).join('');
-  $('#compareTable').innerHTML=`<table class="compare-table"><caption class="sr-only">比较项目与当前选择</caption><thead><tr><th scope="col">比较项目</th>${items.map(item=>`<th scope="col">${escapeHTML(item.name)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+  const headings=items.map(item=>`<th scope="col" role="columnheader">${escapeHTML(item.name)}</th>`).join('');
+  $('#compareTable').innerHTML=`<table class="compare-table cols-${items.length}" role="table"><caption class="sr-only">比较项目与当前选择</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader" class="cmp-dim-head">比较项目</th>${headings}</tr></thead><tbody role="rowgroup">${rows}</tbody></table>`;
   $('#compareTable').scrollLeft=0;
   openModal($('#compareModal'),opener);
 }
