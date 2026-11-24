@@ -4,7 +4,7 @@
   const traditional='寶鑽灣將軍調嶺貢區門東離島觀黃龍藍頭盤號樓層廳間單實積呎幣約個兩車鐘學轉聯絡電話傢儲萬鄰業產臥攤報價額費傭無確認備註須項權經紀總數體齊視';
   const simplified='宝钻湾将军调岭贡区门东离岛观黄龙蓝头盘号楼层厅间单实积尺币约个两车钟学转联络电话家储万邻业产卧摊报价额费佣无确认备注须项权经纪总数体齐视';
   function normalize(text){
-    return String(text).normalize('NFKC').replace(new RegExp('['+traditional+']','g'),char=>simplified[traditional.indexOf(char)]);
+    return String(text).replace(/電/g,'电').replace(/帳|賬/g,'账').replace(/總/g,'总').replace(/開/g,'开').normalize('NFKC').replace(new RegExp('['+traditional+']','g'),char=>simplified[traditional.indexOf(char)]);
   }
 
   const amount='(?:HK\\$|HKD\\$?|港币|港元|\\$)?([\\d,]+(?:\\.\\d+)?)(万|k)?(?:港元|元)?';
@@ -69,13 +69,50 @@
     return '';
   }
 
+
+  const utilityLabel='水电(?:费|气费)?';
+  function readUtilities(fragments){
+    const separate=/(?:不包|不含|未包)水电|水电(?:费)?(?:不包|不含|另计|另算|自付)/;
+    const included=/(?:^|租金|月租|已|全|\d|元)(?:包含|包|含)水电|(?:^|[!！])包水电|水电(?:费)?(?:全包|已包|已含)/;
+    const monthly='(?:每月|月均|月费|/月)';
+    const perPerson='(?:每人|人均|/人)';
+    const shared='(?:整套|全屋|账单(?:合计)?|总计|合计)';
+    const costPattern=new RegExp('^((?:'+monthly+'|'+perPerson+'|'+shared+')*)'+
+      utilityLabel+'((?:[:=约]|另计|另付|'+monthly+'|'+perPerson+'|'+shared+')*)'+
+      amount+'((?:'+monthly+'|'+perPerson+'|'+shared+')*)(?:[（(]?('+numberWord+')人(?:平摊|分摊)[）)]?)?$','i');
+    const costOptions=fragments.map(fragment=>{
+      const inline=fragment.match(/水电(?:费|气费)?(?:[:=]|每月|每人|人均|整套|全屋)/);
+      const match=fragment.match(costPattern)||(inline&&fragment.slice(inline.index).match(costPattern));
+      if(!match)return null;
+      const wording=match[1]+match[2]+match[5];
+      if(!new RegExp(monthly).test(wording))return null;
+      const person=new RegExp(perPerson).test(wording);
+      const sharedBill=new RegExp(shared).test(wording)||Boolean(match[6]);
+      if(person===sharedBill)return null;
+      const value=moneyValue([null,match[3],match[4]]);
+      const people=match[6]?quantity(match[6]):0;
+      return {utilityUnit:person?'person':'shared',utilityAmount:String(value),utilityPeople:people>0?String(people):''};
+    }).filter(Boolean);
+
+    // Conflicting quotes and partial inclusions need user confirmation.
+    const hasIncluded=fragments.some(fragment=>included.test(fragment)&&
+      !/(?:但|仅|只|超出|上限|额度|限额|以内|以下|封顶|按量|除外|水电[^0-9]{0,8}[\d$])/.test(fragment)&&!separate.test(fragment));
+    const hasSeparate=fragments.some(fragment=>separate.test(fragment));
+    const hasLimit=fragments.some(fragment=>/(?:超出|上限|额度|限额|封顶|按量|除外|超额)/.test(fragment));
+    if(hasIncluded)return !hasSeparate&&!hasLimit&&!costOptions.length?{utilityUnit:'included'}:{};
+    if(costOptions.length&&new Set(costOptions.map(option=>JSON.stringify(option))).size===1)return costOptions[0];
+    return {};
+  }
+
   function parse(text,areas){
     const originalLines=String(text).split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
     const lines=originalLines.map(line=>normalize(line).replace(/\s+/g,''));
     const all=lines.join('\n');
     const fragments=lines.flatMap(line=>line.split(/(?<!\d),|,(?!\d)|[;；。|]/));
 
-    const priceFragments=fragments.filter(line=>!/(?:售价|售盘|按揭|编号|楼盘号|物业号|管理费|水电费)/i.test(line));
+    const priceFragments=fragments.filter(fragment=>!/^(?:(?:每月|月均|每人|人均|整套|全屋|账单|合计))*水电/.test(fragment))
+      .map(fragment=>fragment.split(/水电(?:费)?|管理费|网费|煤气费/)[0])
+      .filter(fragment=>!/(?:售价|售盘|按揭|编号|楼盘号|物业号)/i.test(fragment));
     const quote=readQuote(priceFragments);
     const standaloneUnit=all.match(new RegExp('(?:^|\\n)(?:报价单位|租金单位)[:=]?('+unit+')(?=\\n|$)','i'));
     if(quote.rawRent&&standaloneUnit)quote.rentUnit=quote.rentUnit||quoteUnit(standaloneUnit[1]);
@@ -113,6 +150,12 @@
       const months=/^[\d.]+$/.test(deposit[1])?Number(deposit[1]):quantity(deposit[1]);
       if(months>=0&&months<=12)result.depositMonths=String(months);
     }
+    Object.assign(result,readUtilities(fragments));
+    const advance=all.match(new RegExp('押(?:'+numberWord+')付('+numberWord+')'));
+    if(advance){
+      const months=quantity(advance[1]);
+      if(months>0&&months<=60)result.advanceMonths=String(months);
+    }
     result.depositAmount=readFeeAmount(fragments,'(?:押金(?:金额)?|按金(?:金额)?|deposit)',result.rentUnit);
     if(!result.depositAmount&&/(?:免押金|免按金|无押金|无按金|押金(?:为|是|:)?全免)/.test(all))result.depositAmount='0';
     result.intermediaryFee=readFeeAmount(fragments,'(?:中介费|经纪费|代理费|佣金|agencyfee|agentfee|commission)',result.rentUnit);
@@ -124,7 +167,7 @@
     if(/代理盘|代理提供|中介|地产/.test(all))result.source='中介';
     else if(/小红书|小紅書/.test(all))result.source='小红书';
 
-    const labels={rawRent:'原始报价',rentUnit:'报价单位',people:'分摊人数',term:'租期',depositMonths:'押金月数',
+    const labels={utilityUnit:'水电计费方式',utilityAmount:'每月水电金额',utilityPeople:'水电分摊人数',advanceMonths:'预付租金月数',rawRent:'原始报价',rentUnit:'报价单位',people:'分摊人数',term:'租期',depositMonths:'押金月数',
       depositAmount:'押金金额',intermediaryFee:'中介费',commute:'单程通勤',verificationItems:'待核对事项',
       district:'区域',name:'房源名称',bedrooms:'房型',area:'面积',source:'来源'};
     result.found=Object.entries(labels).filter(([key])=>result[key]).map(([,label])=>label);

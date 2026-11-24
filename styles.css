@@ -259,3 +259,16 @@ a{color:inherit}
   }
 }
 
+
+/* Optional cost inputs and the breakdown shown with calculated amounts. */
+.cost-options{margin-top:16px;padding:0 13px;border:1px solid var(--line);border-radius:var(--control-radius)}
+.cost-options summary{min-height:44px;padding-block:11px;color:var(--ink-soft);font-weight:700;cursor:pointer}
+.cost-options[open]{padding-bottom:13px}
+.cost-options label[hidden]{display:none}
+.cost-options .form-cost-check{display:flex;align-items:center;min-height:44px}
+.cost-options .form-cost-check input{width:18px;height:18px;margin:0;accent-color:var(--green)}
+.cost-note{display:block;margin-top:4px;color:var(--muted-strong);font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+.detail-edit{margin-top:14px}
+#listingRows .fee-cell strong{white-space:normal;overflow-wrap:anywhere}
+#detailBody .detail-stats strong{overflow-wrap:anywhere}
+#compareModal .cmp-cell .cost-note{white-space:normal}
